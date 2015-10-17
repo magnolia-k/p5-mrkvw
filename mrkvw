@@ -1,0 +1,169 @@
+#!/usr/bin/env perl
+
+use v5.10.1;
+use utf8;
+use strict;
+use warnings;
+
+use File::Basename;
+use AnyEvent::Filesys::Notify;
+use File::Slurp;
+use Text::Markdown qw/markdown/;
+use Twiggy::Server;
+use Plack::Builder;
+use Plack::App::WebSocket;
+use Encode qw/encode/;
+
+my $watch_path = shift @ARGV;
+if ( ! $watch_path ) {
+    die "No argument\n";
+}
+
+if ( ! -e $watch_path ) {
+    die "No file: $watch_path\n";
+}
+
+my ( $file, $dirs, undef ) = fileparse( $watch_path );
+
+our %connection;
+
+my $notifier = AnyEvent::Filesys::Notify->new(
+    dirs    => [ $dirs ],
+    filter  => sub { shift =~ /$file$/ }, # 判定はもっとちゃんとやるべき
+    cb      => sub {
+        my ( @events ) = @_;
+
+        for my $event ( @events ) {
+            if ( $event->is_modified ) {
+                print "Modified:" . $event->path . "\n";
+
+                open my $fh, '<', $event->path or die $!;
+                my $md = read_file( $event->path );
+                close $fh;
+                if ( exists $connection{$file} ) {
+                    $connection{$file}->send( markdown( $md ));
+                }
+            } elsif ( $event->is_deleted ) {
+                # error??
+            }
+        }
+    },
+);
+
+my $index_html = do { local $/; <DATA> };
+
+my $app = builder {
+
+    mount '/' => sub {
+        return [
+            200, 
+            [ 'Content-Type' => 'text/html' ], 
+            [ encode( 'UTF-8', $index_html) ]
+        ];
+    };
+
+    mount '/websocket' => Plack::App::WebSocket->new(
+        on_error => sub {
+            my $env = shift;
+
+            return [
+                500,
+                [ "Content-Type" => "text/plain" ],
+                [ "Error: " . $env->{"plack.app.websocket.error"}] ];
+
+        },
+
+        on_establish => sub {
+            my $conn = shift;
+            my $env  = shift;
+
+            $conn->on(
+                message => sub {
+                    my ( $conn, $msg ) = @_;
+
+                    if ( ! exists $connection{$watch_path} ) {
+                        $connection{$file} = $conn;
+
+                        open my $fh, '<', $watch_path or die $!;
+                        my $md = read_file( $watch_path );
+                        close $fh;
+
+                        $conn->send(markdown( $md ));
+                    }
+                },
+
+                finish => sub {
+                    delete $connection{$watch_path};
+                    undef $conn;
+                },
+            );
+        },
+
+    )->to_app;
+};
+
+
+my $server = Twiggy::Server->new(
+    port => 7000
+);
+
+$server->register_service( $app );
+
+AE::cv->recv;
+
+__DATA__
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <title>Markdown Viewer</title>
+    </head>
+    <script type=text/javascript>
+        var uri = "ws://" + location.hostname + ":7000/websocket";
+        var webSocket = null;
+
+        function init() {
+            open();
+        }
+
+        function open() {
+            if (webSocket == null) {
+                webSocket = new WebSocket(uri);
+
+                webSocket.onopen = onOpen;
+                webSocket.onmessage = onMessage;
+                webSocket.onclose = onClose;
+                webSocket.onerror = onError;
+            }
+        }
+
+        function onOpen(event) {
+            webSocket.send("open");
+        }
+
+        function onMessage(event) {
+            var content = document.getElementById('content');
+            while (content.firstChild) content.removeChild(content.firstChild);
+
+            content.innerHTML = event.data;
+        }
+
+        function onError(event) {
+        }
+
+        function onClose(event) {
+            var content = document.getElementById('content');
+            while (content.firstChild) content.removeChild(content.firstChild);
+
+            content.innerText = "プレビュー終わり！";
+        }
+
+        window.onload = function(event) {
+            init();
+        }
+
+    </script>
+    <body>
+        <div id="content"><p id="text"></p></div>
+    </body>
+</html>
