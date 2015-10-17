@@ -20,7 +20,12 @@ if ( ! $watch_path ) {
 }
 
 if ( ! -e $watch_path ) {
-    die "No file: $watch_path\n";
+    open my $fh, '>', $watch_path or die $!; # create empty file
+    close $fh;
+}
+
+if ( ! File::Spec->file_name_is_absolute( $watch_path ) ) {
+    $watch_path = File::Spec->rel2abs( $watch_path);
 }
 
 my ( $file, $dirs, undef ) = fileparse( $watch_path );
@@ -35,13 +40,11 @@ my $notifier = AnyEvent::Filesys::Notify->new(
 
         for my $event ( @events ) {
             if ( $event->is_modified ) {
-                print "Modified:" . $event->path . "\n";
-
                 open my $fh, '<', $event->path or die $!;
                 my $md = read_file( $event->path );
                 close $fh;
-                if ( exists $connection{$file} ) {
-                    $connection{$file}->send( markdown( $md ));
+                if ( exists $connection{$watch_path} ) {
+                    $connection{$watch_path}->send( markdown( $md ));
                 }
             } elsif ( $event->is_deleted ) {
                 # error??
@@ -82,7 +85,7 @@ my $app = builder {
                     my ( $conn, $msg ) = @_;
 
                     if ( ! exists $connection{$watch_path} ) {
-                        $connection{$file} = $conn;
+                        $connection{$watch_path} = $conn;
 
                         open my $fh, '<', $watch_path or die $!;
                         my $md = read_file( $watch_path );
@@ -155,7 +158,7 @@ __DATA__
             var content = document.getElementById('content');
             while (content.firstChild) content.removeChild(content.firstChild);
 
-            content.innerText = "プレビュー終わり！";
+            content.innerText = "プレビュー終了";
         }
 
         window.onload = function(event) {
