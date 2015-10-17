@@ -11,8 +11,8 @@
 
 # INSTALL
 
- $ git clone https://github.com/magnolia-k/p5-mrkvw.git
- $ cd p5-mrkvw
- $ cpanm --installdeps .
- $ ./mrkvw [markdown file path]
+    $ git clone https://github.com/magnolia-k/p5-mrkvw.git
+    $ cd p5-mrkvw
+    $ cpanm --installdeps .
+    $ ./mrkvw [markdown file path]
 
