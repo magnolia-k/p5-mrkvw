@@ -123,6 +123,9 @@ __DATA__
     <head>
         <meta charset="UTF-8" />
         <title>Markdown Viewer</title>
+        <style type="text/css">
+            code { color: #FFFFFF; background-color: #000000 }
+        </style>
     </head>
     <script type=text/javascript>
         var uri = "ws://" + location.hostname + ":7000/websocket";
