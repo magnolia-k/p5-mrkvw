@@ -8,7 +8,8 @@ use warnings;
 use File::Basename;
 use AnyEvent::Filesys::Notify;
 use File::Slurp;
-use Text::Markdown qw/markdown/;
+#use Text::Markdown qw/markdown/;
+use Text::Markdown::Hoedown;
 use Twiggy::Server;
 use Plack::Builder;
 use Plack::App::WebSocket;
@@ -34,7 +35,7 @@ our %connection;
 
 my $notifier = AnyEvent::Filesys::Notify->new(
     dirs    => [ $dirs ],
-    filter  => sub { shift =~ /$file$/ }, # 判定はもっとちゃんとやるべき
+    filter  => sub { shift eq $watch_path },
     cb      => sub {
         my ( @events ) = @_;
 
@@ -44,7 +45,7 @@ my $notifier = AnyEvent::Filesys::Notify->new(
                 my $md = read_file( $event->path );
                 close $fh;
                 if ( exists $connection{$watch_path} ) {
-                    $connection{$watch_path}->send( markdown( $md ));
+                    $connection{$watch_path}->send( markdown( $md, extensions => HOEDOWN_EXT_FENCED_CODE ));
                 }
             } elsif ( $event->is_deleted ) {
                 # error??
@@ -91,7 +92,7 @@ my $app = builder {
                         my $md = read_file( $watch_path );
                         close $fh;
 
-                        $conn->send(markdown( $md ));
+                        $conn->send(markdown( $md, extensions => HOEDOWN_EXT_FENCED_CODE ));
                     }
                 },
 
@@ -109,6 +110,8 @@ my $app = builder {
 my $server = Twiggy::Server->new(
     port => 7000
 );
+
+say "Access to http://localhost:7000";
 
 $server->register_service( $app );
 
