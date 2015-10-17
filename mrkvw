@@ -8,7 +8,7 @@ use warnings;
 use File::Basename;
 use AnyEvent::Filesys::Notify;
 use File::Slurp;
-use Text::Markdown::Discount qw/markdown/;
+use Text::Markdown qw/markdown/;
 use Twiggy::Server;
 use Plack::Builder;
 use Plack::App::WebSocket;
